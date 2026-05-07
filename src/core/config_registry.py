@@ -10,6 +10,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
+from src.config import AGENT_MAX_STEPS_DEFAULT
+
 SCHEMA_VERSION = "2026-03-29"
 
 _CATEGORY_DEFINITIONS: List[Dict[str, Any]] = [
@@ -83,7 +85,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     # ------------------------------------------------------------------
     "LITELLM_MODEL": {
         "title": "Primary Model",
-        "description": "Primary model in provider/model format (e.g. gemini/gemini-3-flash-preview, openai/deepseek-chat, anthropic/claude-3-5-sonnet-20241022). If empty, it is auto-inferred from available API keys or channel declarations.",
+        "description": "Primary model in provider/model format (e.g. gemini/gemini-3.1-pro-preview, deepseek/deepseek-v4-flash, anthropic/claude-sonnet-4-6). If empty, it is auto-inferred from available API keys or channel declarations.",
         "category": "ai_model",
         "data_type": "string",
         "ui_control": "text",
@@ -111,7 +113,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     },
     "LITELLM_FALLBACK_MODELS": {
         "title": "Fallback Models",
-        "description": "Comma-separated fallback models tried when the primary model fails (e.g. anthropic/claude-3-5-sonnet-20241022,openai/gpt-4o-mini). Useful for cross-provider redundancy.",
+        "description": "Comma-separated fallback models tried when the primary model fails (e.g. anthropic/claude-sonnet-4-6,openai/gpt-5.4-mini). Useful for cross-provider redundancy.",
         "category": "ai_model",
         "data_type": "string",
         "ui_control": "text",
@@ -182,12 +184,54 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "validation": {},
         "display_order": 5,
     },
+    "ANSPIRE_LLM_ENABLED": {
+        "title": "Anspire LLM Enabled",
+        "description": "Use ANSPIRE_API_KEYS as an OpenAI-compatible Anspire LLM key when no higher-priority LLM channel or OpenAI-compatible key is configured.",
+        "category": "ai_model",
+        "data_type": "boolean",
+        "ui_control": "switch",
+        "is_sensitive": False,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": "true",
+        "options": [],
+        "validation": {},
+        "display_order": 6,
+    },
+    "ANSPIRE_LLM_BASE_URL": {
+        "title": "Anspire LLM Base URL",
+        "description": "Anspire OpenAI-compatible gateway. Default: https://open-gateway.anspire.cn/v6; global endpoint: https://open-gateway.anspire.ai/v6.",
+        "category": "ai_model",
+        "data_type": "string",
+        "ui_control": "text",
+        "is_sensitive": False,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": "https://open-gateway.anspire.cn/v6",
+        "options": [],
+        "validation": {"format": "url"},
+        "display_order": 7,
+    },
+    "ANSPIRE_LLM_MODEL": {
+        "title": "Anspire LLM Model",
+        "description": "Default model used when ANSPIRE_API_KEYS enables the Anspire LLM gateway without an explicit LITELLM_MODEL.",
+        "category": "ai_model",
+        "data_type": "string",
+        "ui_control": "text",
+        "is_sensitive": False,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": "Doubao-Seed-2.0-lite",
+        "options": [],
+        "validation": {},
+        "display_order": 8,
+    },
     # ------------------------------------------------------------------
     # AI Model – DeepSeek official (independent from OpenAI-compatible)
     # ------------------------------------------------------------------
     "DEEPSEEK_API_KEY": {
         "title": "DeepSeek API Key",
-        "description": "Official DeepSeek API key (from https://platform.deepseek.com). Auto-infers openai/deepseek-chat when set alone. Also works in multi-channel mode.",
+        "description": "Official DeepSeek API key (from https://platform.deepseek.com). For compatibility, a key set alone still auto-infers deepseek/deepseek-chat and logs a deprecation warning; new configs should migrate to deepseek/deepseek-v4-flash. Also works in multi-channel mode.",
         "category": "ai_model",
         "data_type": "string",
         "ui_control": "password",
@@ -271,7 +315,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     },
     "ANSPIRE_API_KEYS": {
         "title": "Anspire API Keys",
-        "description": "Comma-separated Anspire Search API keys.",
+        "description": "Comma-separated Anspire Open API keys. Used by Anspire Search and, by default, the Anspire OpenAI-compatible LLM gateway.",
         "category": "data_source",
         "data_type": "string",
         "ui_control": "password",
@@ -535,7 +579,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "gemini-3-flash-preview",
+        "default_value": "gemini-3.1-pro-preview",
         "options": [],
         "validation": {},
         "display_order": 20,
@@ -549,7 +593,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "gemini-2.5-flash",
+        "default_value": "gemini-3-flash-preview",
         "options": [],
         "validation": {},
         "display_order": 21,
@@ -619,7 +663,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "gpt-4o-mini",
+        "default_value": "gpt-5.5",
         "options": [],
         "validation": {},
         "display_order": 60,
@@ -682,14 +726,14 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     },
     "ANTHROPIC_MODEL": {
         "title": "Anthropic Model",
-        "description": "Claude 模型名称（如 claude-3-5-sonnet-20241022）。",
+        "description": "Claude 模型名称（如 claude-sonnet-4-6）。",
         "category": "ai_model",
         "data_type": "string",
         "ui_control": "text",
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "claude-3-5-sonnet-20241022",
+        "default_value": "claude-sonnet-4-6",
         "options": [],
         "validation": {},
         "display_order": 36,
@@ -806,6 +850,23 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "validation": {},
         "display_order": 51,
     },
+    "CUSTOM_WEBHOOK_BODY_TEMPLATE": {
+        "title": "Custom Webhook Body Template",
+        "description": (
+            "Optional JSON body template for custom webhooks. Supports $content_json, "
+            "$content, $title_json, and $title placeholders."
+        ),
+        "category": "notification",
+        "data_type": "string",
+        "ui_control": "textarea",
+        "is_sensitive": False,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": None,
+        "options": [],
+        "validation": {},
+        "display_order": 52,
+    },
     "WEBHOOK_VERIFY_SSL": {
         "title": "Webhook SSL Verify",
         "description": "Verify HTTPS certificates for webhook requests. Set to false ONLY for self-signed certs in trusted internal networks. WARNING: Disabling allows MITM attacks—do NOT use on public networks.",
@@ -818,7 +879,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "default_value": "true",
         "options": [],
         "validation": {},
-        "display_order": 52,
+        "display_order": 53,
     },
     "REPORT_SUMMARY_ONLY": {
         "title": "Report Summary Only",
@@ -1166,6 +1227,37 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "validation": {},
         "display_order": 45,
     },
+    "ASTRBOT_URL": {
+        "title": "AstrBot URL",
+        "description": "AstrBot webhook endpoint URL.",
+        "category": "notification",
+        "data_type": "string",
+        "ui_control": "password",
+        "is_sensitive": True,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": None,
+        "options": [],
+        "validation": {
+            "item_type": "url",
+            "allowed_schemes": ["http", "https"],
+        },
+        "display_order": 46,
+    },
+    "ASTRBOT_TOKEN": {
+        "title": "AstrBot Token",
+        "description": "Optional AstrBot bearer token.",
+        "category": "notification",
+        "data_type": "string",
+        "ui_control": "password",
+        "is_sensitive": True,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": None,
+        "options": [],
+        "validation": {},
+        "display_order": 47,
+    },
     "SINGLE_STOCK_NOTIFY": {
         "title": "Single Stock Notify",
         "description": "Push immediately after each single stock analysis instead of batching all results together.",
@@ -1423,7 +1515,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     },
     "MARKET_REVIEW_REGION": {
         "title": "Market Review Region",
-        "description": "Market region for review: cn (A-shares), us (US stocks), or both.",
+        "description": "Market region for review: cn (A-shares), hk (Hong Kong), us (US stocks), or both (all markets).",
         "category": "system",
         "data_type": "string",
         "ui_control": "select",
@@ -1431,8 +1523,8 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "is_required": False,
         "is_editable": True,
         "default_value": "cn",
-        "options": ["cn", "us", "both"],
-        "validation": {"enum": ["cn", "us", "both"]},
+        "options": ["cn", "hk", "us", "both"],
+        "validation": {"enum": ["cn", "hk", "us", "both"]},
         "display_order": 47,
     },
     "MAX_WORKERS": {
@@ -1563,14 +1655,14 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     },
     "AGENT_MAX_STEPS": {
         "title": "Agent Max Steps",
-        "description": "Maximum reasoning-step ceiling for Agent mode. In orchestrator mode, each sub-agent keeps min(its default, this limit) so lower-default specialists are not inflated.",
+        "description": f"Maximum reasoning-step limit for Agent mode. At the default ({AGENT_MAX_STEPS_DEFAULT}), each sub-agent keeps its own preset. When raised above {AGENT_MAX_STEPS_DEFAULT}, all sub-agents adopt this value. When lowered below a sub-agent's preset, that sub-agent is capped at this value.",
         "category": "agent",
         "data_type": "integer",
         "ui_control": "number",
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "10",
+        "default_value": str(AGENT_MAX_STEPS_DEFAULT),
         "options": [],
         "validation": {"min": 1, "max": 50},
         "display_order": 20,
@@ -1784,7 +1876,10 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     },
     "AGENT_EVENT_ALERT_RULES_JSON": {
         "title": "Event Alert Rules",
-        "description": "JSON array of Event Monitor rules loaded by schedule mode for background alert polling.",
+        "description": (
+            "JSON array of Event Monitor rules loaded by schedule mode. "
+            "Supported alert_type values: price_cross, price_change_percent, volume_spike."
+        ),
         "category": "agent",
         "data_type": "json",
         "ui_control": "textarea",
