@@ -12,6 +12,7 @@ from src.config import (
     get_effective_agent_models_to_try,
     get_effective_agent_primary_model,
     get_fixed_litellm_temperature,
+    get_litellm_direct_route_model,
     normalize_litellm_temperature,
 )
 
@@ -54,6 +55,24 @@ class LLMChannelConfigTestCase(unittest.TestCase):
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_legacy_openai_compatible_raw_slash_model_routes_internally(self, _mock_parse_yaml, _mock_setup_env) -> None:
+        env = {
+            "OPENAI_API_KEY": "sk-test-value",
+            "OPENAI_BASE_URL": "https://api.siliconflow.cn/v1",
+            "LITELLM_MODEL": "deepseek-ai/DeepSeek-V3.2",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.litellm_model, "deepseek-ai/DeepSeek-V3.2")
+        self.assertEqual(
+            get_litellm_direct_route_model(config.litellm_model, config),
+            "openai/deepseek-ai/DeepSeek-V3.2",
+        )
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
     def test_anspire_channel_reuses_shared_key_and_defaults(self, _mock_parse_yaml, _mock_setup_env) -> None:
         env = {
             "LLM_CHANNELS": "anspire",
@@ -66,8 +85,10 @@ class LLMChannelConfigTestCase(unittest.TestCase):
         self.assertEqual(config.llm_models_source, "llm_channels")
         self.assertEqual(config.llm_channels[0]["protocol"], "openai")
         self.assertEqual(config.llm_channels[0]["api_keys"], ["sk-anspire-test-value"])
-        self.assertEqual(config.llm_channels[0]["models"], [f"openai/{ANSPIRE_LLM_MODEL_DEFAULT}"])
+        self.assertEqual(config.llm_channels[0]["models"], [ANSPIRE_LLM_MODEL_DEFAULT])
+        self.assertEqual(config.llm_model_list[0]["model_name"], ANSPIRE_LLM_MODEL_DEFAULT)
         params = config.llm_model_list[0]["litellm_params"]
+        self.assertEqual(params["model"], f"openai/{ANSPIRE_LLM_MODEL_DEFAULT}")
         self.assertEqual(params["api_base"], ANSPIRE_LLM_BASE_URL_DEFAULT)
 
     @patch("src.config.setup_env")
@@ -132,7 +153,7 @@ class LLMChannelConfigTestCase(unittest.TestCase):
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
-    def test_openai_compatible_channel_prefixes_non_provider_slash_models(self, _mock_parse_yaml, _mock_setup_env) -> None:
+    def test_openai_compatible_channel_preserves_original_slash_models_for_runtime_selection(self, _mock_parse_yaml, _mock_setup_env) -> None:
         env = {
             "LLM_CHANNELS": "siliconflow",
             "LLM_SILICONFLOW_PROTOCOL": "openai",
@@ -146,6 +167,14 @@ class LLMChannelConfigTestCase(unittest.TestCase):
 
         self.assertEqual(
             config.llm_channels[0]["models"],
+            ["Qwen/Qwen3-8B", "deepseek-ai/DeepSeek-V3"],
+        )
+        self.assertEqual(
+            [entry["model_name"] for entry in config.llm_model_list],
+            ["Qwen/Qwen3-8B", "deepseek-ai/DeepSeek-V3"],
+        )
+        self.assertEqual(
+            [entry["litellm_params"]["model"] for entry in config.llm_model_list],
             ["openai/Qwen/Qwen3-8B", "openai/deepseek-ai/DeepSeek-V3"],
         )
 
@@ -167,7 +196,7 @@ class LLMChannelConfigTestCase(unittest.TestCase):
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
-    def test_minimax_prefixed_models_are_not_rewritten_for_openai_compatible_channels(self, _mock_parse_yaml, _mock_setup_env) -> None:
+    def test_openai_compatible_channel_preserves_minimax_runtime_name(self, _mock_parse_yaml, _mock_setup_env) -> None:
         env = {
             "LLM_CHANNELS": "primary",
             "LLM_PRIMARY_PROTOCOL": "openai",
@@ -180,7 +209,8 @@ class LLMChannelConfigTestCase(unittest.TestCase):
             config = Config._load_from_env()
 
         self.assertEqual(config.llm_channels[0]["models"], ["minimax/MiniMax-M1"])
-        self.assertEqual(config.llm_model_list[0]["litellm_params"]["model"], "minimax/MiniMax-M1")
+        self.assertEqual(config.llm_model_list[0]["model_name"], "minimax/MiniMax-M1")
+        self.assertEqual(config.llm_model_list[0]["litellm_params"]["model"], "openai/minimax/MiniMax-M1")
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
@@ -494,6 +524,7 @@ class LLMChannelConfigTestCase(unittest.TestCase):
             config = Config._load_from_env()
 
         params = config.llm_model_list[0]["litellm_params"]
+        self.assertEqual(config.llm_model_list[0]["model_name"], "my-model")
         self.assertEqual(params["model"], "openai/my-model")
         self.assertEqual(config.llm_channels[0]["protocol"], "openai")
 

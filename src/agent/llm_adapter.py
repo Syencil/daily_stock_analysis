@@ -23,7 +23,9 @@ from src.config import (
     get_configured_llm_models,
     get_effective_agent_models_to_try,
     get_effective_agent_primary_model,
+    get_litellm_direct_route_model,
     normalize_litellm_temperature,
+    resolve_litellm_router_model_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -211,7 +213,8 @@ class LLMToolAdapter:
             return
 
         # --- Legacy path ---
-        keys = get_api_keys_for_model(litellm_model, config)
+        route_litellm_model = get_litellm_direct_route_model(litellm_model, config)
+        keys = get_api_keys_for_model(route_litellm_model, config)
         if not keys:
             logger.info(
                 f"Agent LLM: litellm initialized (model={litellm_model}, "
@@ -220,12 +223,12 @@ class LLMToolAdapter:
             return
 
         if len(keys) > 1:
-            ep = extra_litellm_params(litellm_model, config)
+            ep = extra_litellm_params(route_litellm_model, config)
             legacy_model_list = [
                 {
                     "model_name": litellm_model,
                     "litellm_params": {
-                        "model": litellm_model,
+                        "model": route_litellm_model,
                         "api_key": k,
                         **ep,
                     },
@@ -426,8 +429,10 @@ class LLMToolAdapter:
         use_channel_router = self._has_channel_config()
         _router_model_names = set(get_configured_llm_models(self._config.llm_model_list))
         agent_primary_model = get_effective_agent_primary_model(self._config)
-        if use_channel_router and self._router and model in _router_model_names:
+        router_model = resolve_litellm_router_model_name(model, self._config.llm_model_list)
+        if use_channel_router and self._router and router_model in _router_model_names:
             # Channel / YAML path: Router manages all models in its model_list
+            call_kwargs["model"] = router_model
             response = self._router.completion(**call_kwargs)
         elif self._router and model == agent_primary_model and not use_channel_router:
             # Legacy path: Router for primary model multi-key
@@ -436,10 +441,12 @@ class LLMToolAdapter:
             # Legacy/direct-env path: direct call (also handles direct-env
             # providers like groq/ or bedrock/ that are not in the Router
             # model_list even when channel mode is active)
-            keys = get_api_keys_for_model(model, self._config)
+            route_model = get_litellm_direct_route_model(model, self._config)
+            call_kwargs["model"] = route_model
+            keys = get_api_keys_for_model(route_model, self._config)
             if keys:
                 call_kwargs["api_key"] = keys[0]
-            call_kwargs.update(extra_litellm_params(model, self._config))
+            call_kwargs.update(extra_litellm_params(route_model, self._config))
             response = litellm.completion(**call_kwargs)
 
         return self._parse_litellm_response(response, model)

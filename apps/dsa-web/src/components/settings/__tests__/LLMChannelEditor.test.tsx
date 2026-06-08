@@ -104,6 +104,30 @@ describe('LLMChannelEditor', () => {
     expect(within(visionModelSelect).getByRole('option', { name: 'minimax/MiniMax-M1' })).toBeInTheDocument();
   });
 
+  it('shows SiliconFlow models with original IDs and keeps old openai alias selected', () => {
+    render(
+      <LLMChannelEditor
+        items={[
+          { key: 'LLM_CHANNELS', value: 'siliconflow' },
+          { key: 'LLM_SILICONFLOW_PROTOCOL', value: 'openai' },
+          { key: 'LLM_SILICONFLOW_BASE_URL', value: 'https://api.siliconflow.cn/v1' },
+          { key: 'LLM_SILICONFLOW_ENABLED', value: 'true' },
+          { key: 'LLM_SILICONFLOW_API_KEY', value: 'secret-key' },
+          { key: 'LLM_SILICONFLOW_MODELS', value: 'deepseek-ai/DeepSeek-V3.2' },
+          { key: 'LITELLM_MODEL', value: 'openai/deepseek-ai/DeepSeek-V3.2' },
+        ]}
+        configVersion="v1"
+        maskToken="******"
+        onSaved={() => {}}
+      />
+    );
+
+    const primaryModelSelect = screen.getByRole('combobox', { name: '主模型' });
+
+    expect(within(primaryModelSelect).getByRole('option', { name: 'deepseek-ai/DeepSeek-V3.2' })).toBeInTheDocument();
+    expect(within(primaryModelSelect).getByRole('option', { name: 'openai/deepseek-ai/DeepSeek-V3.2（当前配置）' })).toBeInTheDocument();
+  });
+
   it('uses DeepSeek V4 defaults when adding the official preset', async () => {
     render(
       <LLMChannelEditor

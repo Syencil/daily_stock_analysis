@@ -29,7 +29,9 @@ from src.config import (
     get_api_keys_for_model,
     get_config,
     get_configured_llm_models,
+    get_litellm_direct_route_model,
     normalize_litellm_temperature,
+    resolve_litellm_router_model_name,
     resolve_news_window_days,
 )
 from src.storage import persist_llm_usage
@@ -1295,16 +1297,17 @@ class GeminiAnalyzer:
             return
 
         # --- Legacy path: build Router for multi-key, or use single key ---
-        keys = get_api_keys_for_model(litellm_model, config)
+        route_litellm_model = get_litellm_direct_route_model(litellm_model, config)
+        keys = get_api_keys_for_model(route_litellm_model, config)
 
         if len(keys) > 1:
             # Build legacy Router for primary model multi-key load-balancing
-            extra_params = extra_litellm_params(litellm_model, config)
+            extra_params = extra_litellm_params(route_litellm_model, config)
             legacy_model_list = [
                 {
                     "model_name": litellm_model,
                     "litellm_params": {
-                        "model": litellm_model,
+                        "model": route_litellm_model,
                         "api_key": k,
                         **extra_params,
                     },
@@ -1343,15 +1346,19 @@ class GeminiAnalyzer:
     ) -> Any:
         """Dispatch a LiteLLM completion through router or direct fallback."""
         effective_kwargs = dict(call_kwargs)
-        if use_channel_router and self._router and model in router_model_names:
+        router_model = resolve_litellm_router_model_name(model, config.llm_model_list)
+        if use_channel_router and self._router and router_model in router_model_names:
+            effective_kwargs["model"] = router_model
             return self._router.completion(**effective_kwargs)
         if self._router and model == config.litellm_model and not use_channel_router:
             return self._router.completion(**effective_kwargs)
 
-        keys = get_api_keys_for_model(model, config)
+        route_model = get_litellm_direct_route_model(model, config)
+        effective_kwargs["model"] = route_model
+        keys = get_api_keys_for_model(route_model, config)
         if keys:
             effective_kwargs["api_key"] = keys[0]
-        effective_kwargs.update(extra_litellm_params(model, config))
+        effective_kwargs.update(extra_litellm_params(route_model, config))
         return litellm.completion(**effective_kwargs)
 
     def _normalize_usage(self, usage_obj: Any) -> Dict[str, Any]:

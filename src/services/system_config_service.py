@@ -26,6 +26,7 @@ from src.config import (
     canonicalize_llm_channel_protocol,
     channel_allows_empty_api_key,
     get_configured_llm_models,
+    get_litellm_channel_route_model,
     normalize_agent_litellm_model,
     normalize_litellm_temperature,
     normalize_news_strategy_profile,
@@ -519,14 +520,15 @@ class SystemConfigService:
         resolved_protocol = resolve_llm_channel_protocol(protocol, base_url=base_url, models=raw_models, channel_name=name)
         resolved_models = [normalize_llm_channel_model(model, resolved_protocol, base_url) for model in raw_models]
         resolved_model = resolved_models[0]
+        route_model = get_litellm_channel_route_model(resolved_model, resolved_protocol, base_url)
         api_keys = [segment.strip() for segment in api_key.split(",") if segment.strip()]
         selected_api_key = api_keys[0] if api_keys else ""
 
         call_kwargs: Dict[str, Any] = {
-            "model": resolved_model,
+            "model": route_model,
             "messages": [{"role": "user", "content": "Reply with OK"}],
             "temperature": normalize_litellm_temperature(
-                resolved_model,
+                route_model,
                 self._get_runtime_llm_temperature(),
             ),
             "max_tokens": 256,  # Increased to allow MiniMax-M2.7 thinking process + response
@@ -577,7 +579,7 @@ class SystemConfigService:
             capability_results = (
                 self._run_llm_capability_checks(
                     litellm_module=litellm,
-                    resolved_model=resolved_model,
+                    resolved_model=route_model,
                     selected_api_key=selected_api_key,
                     base_url=base_url,
                     timeout_seconds=timeout_seconds,
@@ -2617,6 +2619,10 @@ class SystemConfigService:
                     continue
                 seen.add(normalized_model)
                 models.append(normalized_model)
+                route_model = get_litellm_channel_route_model(normalized_model, resolved_protocol, base_url_value)
+                if route_model and route_model != normalized_model and route_model not in seen:
+                    seen.add(route_model)
+                    models.append(route_model)
 
         return models
 

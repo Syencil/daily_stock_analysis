@@ -867,9 +867,10 @@ class SystemConfigServiceTestCase(unittest.TestCase):
 
         self.assertTrue(payload["success"])
         self.assertEqual(payload["resolved_protocol"], "openai")
-        self.assertEqual(payload["resolved_model"], "openai/deepseek-chat")
+        self.assertEqual(payload["resolved_model"], "deepseek-chat")
         self.assertEqual(payload["capability_results"], {})
         self.assertEqual(mock_completion.call_count, 1)
+        self.assertEqual(mock_completion.call_args.kwargs["model"], "openai/deepseek-chat")
 
     @patch("litellm.completion")
     def test_test_llm_channel_falls_back_to_message_content_when_content_blocks_empty(
@@ -902,7 +903,30 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         )
 
         self.assertTrue(payload["success"])
-        self.assertEqual(payload["resolved_model"], "openai/deepseek-chat")
+        self.assertEqual(payload["resolved_model"], "deepseek-chat")
+        self.assertEqual(mock_completion.call_args.kwargs["model"], "openai/deepseek-chat")
+
+    @patch("litellm.completion")
+    def test_test_llm_channel_preserves_siliconflow_deepseek_model_name(self, mock_completion) -> None:
+        mock_completion.return_value = type(
+            "MockResponse",
+            (),
+            {
+                "choices": [type("Choice", (), {"message": type("Message", (), {"content": "OK"})()})()],
+            },
+        )()
+
+        payload = self.service.test_llm_channel(
+            name="siliconflow",
+            protocol="openai",
+            base_url="https://api.siliconflow.cn/v1",
+            api_key="sk-test-value",
+            models=["deepseek-ai/DeepSeek-V3.2"],
+        )
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["resolved_model"], "deepseek-ai/DeepSeek-V3.2")
+        self.assertEqual(mock_completion.call_args.kwargs["model"], "openai/deepseek-ai/DeepSeek-V3.2")
 
     @patch("litellm.completion")
     def test_test_llm_channel_allows_ollama_prefix_without_explicit_protocol(self, mock_completion) -> None:

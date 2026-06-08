@@ -50,8 +50,8 @@ Most third-party relay platforms and local API providers support the OpenAI inte
 OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxx
 # Fill in the platform's API Base URL (Very Important: Usually must end with /v1)
 OPENAI_BASE_URL=https://api.siliconflow.cn/v1
-# Fill in the specific model name (Very Important: You must add the "openai/" prefix so the system recognizes it)
-LITELLM_MODEL=openai/deepseek-ai/DeepSeek-V3 
+# Fill in the specific upstream model name; the system preserves the original model ID
+LITELLM_MODEL=deepseek-ai/DeepSeek-V3
 ```
 
 ### Example 2: Using the Official DeepSeek API
@@ -96,7 +96,7 @@ The backend exposes a read-only status endpoint at `GET /api/v1/system/config/se
 
 ### Web channel editor: compatibility, migration, and rollback rules
 
-- The preset provider / Base URL / sample models are **form defaults only**. What gets persisted is still exactly what you submit in `LLM_{CHANNEL}_PROTOCOL`, `LLM_{CHANNEL}_BASE_URL`, `LLM_{CHANNEL}_MODELS`, and `LLM_{CHANNEL}_API_KEY(S)`; the editor does not silently rewrite them to a different provider name or URL.
+- The preset provider / Base URL / sample models are **form defaults only**. What gets persisted is still exactly what you submit in `LLM_{CHANNEL}_PROTOCOL`, `LLM_{CHANNEL}_BASE_URL`, `LLM_{CHANNEL}_MODELS`, and `LLM_{CHANNEL}_API_KEY(S)`; the editor does not silently rewrite them to a different provider name or URL. OpenAI-compatible configs preserve the upstream model ID returned by the platform, such as SiliconFlow `deepseek-ai/DeepSeek-V3.2`, so you do not need to rewrite it as `openai/...`.
 - "Discover models" only calls `{base_url}/models` for `OpenAI Compatible` / `DeepSeek` channels, and the default "Test connection" action only sends one minimal chat completion request. Optional runtime capability checks must be explicitly selected by the user and send additional JSON / tools / stream / vision smoke requests; the result only represents a best-effort check for the current account, model, and endpoint at that moment. The returned `stage / error_code / details / latency_ms / capability_results` fields are for structured diagnostics only, are **never persisted** back into `.env`, and do not block saving.
 - Runtime capability checks send real LLM requests and may incur token / image-input cost, RPM/TPM rate limiting, insufficient balance errors, or timeouts. A failed check may come from account permissions, model entitlement, endpoint region, balance, provider compatibility layers, or LiteLLM translation behavior; it does not prove that the provider globally lacks that capability. P3 does not include online smoke coverage for every real provider. Its compatibility basis is the repository dependency constraint `litellm>=1.80.10,!=1.82.7,!=1.82.8,<2.0.0`, LiteLLM `completion()` / OpenAI I/O format / streaming / exception mapping, and the OpenAI Chat Completions shapes for JSON mode, tool calling, streaming, and vision input.
 - External references: LiteLLM Python SDK / OpenAI I/O format / streaming / exception mapping: <https://docs.litellm.ai/>; LiteLLM OpenAI-compatible routing: <https://docs.litellm.ai/docs/providers/openai_compatible>; OpenAI Chat Completions: <https://platform.openai.com/docs/api-reference/chat/create>; JSON mode: <https://platform.openai.com/docs/guides/structured-outputs?api-mode=chat>; tool calling: <https://platform.openai.com/docs/guides/function-calling?api-mode=chat>; streaming: <https://platform.openai.com/docs/guides/streaming-responses?api-mode=chat>; vision input: <https://platform.openai.com/docs/guides/images-vision?api-mode=chat>.

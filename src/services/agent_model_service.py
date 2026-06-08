@@ -40,22 +40,24 @@ def _build_non_legacy_deployments(config) -> List[Dict[str, Any]]:
 
     for index, entry in enumerate(getattr(config, "llm_model_list", []) or []):
         params = entry.get("litellm_params", {}) or {}
-        model_name = str(params.get("model") or "").strip()
+        route_model = str(params.get("model") or "").strip()
+        model_name = str(entry.get("model_name") or route_model).strip()
         if not model_name or model_name.startswith("__legacy_"):
             continue
 
         api_base = params.get("api_base")
         deployment_name = entry.get("model_name")
+        is_primary = model_name == primary_model or route_model == primary_model
         deployments.append(
             {
                 "deployment_id": f"{source}:{index}",
                 "model": model_name,
-                "provider": _get_model_provider(model_name),
+                "provider": _get_model_provider(route_model or model_name),
                 "source": source,
                 "api_base": str(api_base).strip() if api_base else None,
                 "deployment_name": str(deployment_name).strip() if deployment_name else None,
-                "is_primary": model_name == primary_model,
-                "is_fallback": model_name in fallback_models,
+                "is_primary": is_primary,
+                "is_fallback": model_name in fallback_models or route_model in fallback_models,
             }
         )
 

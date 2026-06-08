@@ -658,6 +658,10 @@ function normalizeModelForRuntime(model: string, protocol: ChannelProtocol): str
     return trimmedModel;
   }
 
+  if (protocol === 'openai') {
+    return trimmedModel;
+  }
+
   if (trimmedModel.includes('/')) {
     const rawPrefix = trimmedModel.split('/', 1)[0].trim();
     const lowerPrefix = rawPrefix.toLowerCase();
@@ -834,8 +838,17 @@ function hasLegacyRuntimeSource(model: string, itemMap: Map<string, string>): bo
   return (LEGACY_PROVIDER_KEYS[provider] || []).some((key) => (itemMap.get(key) || '').trim().length > 0);
 }
 
+function hasOpenAICompatibleAlias(model: string, availableModels: string[]): boolean {
+  const openaiPrefix = 'openai/';
+  if (model.startsWith(openaiPrefix)) {
+    return availableModels.includes(model.slice(openaiPrefix.length));
+  }
+  return availableModels.includes(`${openaiPrefix}${model}`);
+}
+
 function isRuntimeModelAvailable(model: string, availableModels: string[], itemMap: Map<string, string>): boolean {
   return availableModels.includes(model)
+    || hasOpenAICompatibleAlias(model, availableModels)
     || usesDirectEnvProvider(model)
     || (availableModels.length === 0 && hasLegacyRuntimeSource(model, itemMap));
 }

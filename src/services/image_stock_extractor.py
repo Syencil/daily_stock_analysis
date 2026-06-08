@@ -19,7 +19,7 @@ import sys
 import time
 from typing import List, Optional, Tuple
 
-from src.config import Config, get_config
+from src.config import Config, get_config, get_litellm_direct_route_model
 
 logger = logging.getLogger(__name__)
 
@@ -249,8 +249,9 @@ def _call_litellm_vision(image_b64: str, mime_type: str, api_key: Optional[str] 
     key = api_key if api_key and api_key in keys else random.choice(keys)
 
     data_url = f"data:{mime_type};base64,{image_b64}"
+    route_model = get_litellm_direct_route_model(model, cfg)
     call_kwargs: dict = {
-        "model": model,
+        "model": route_model,
         "messages": [
             {
                 "role": "user",
@@ -265,7 +266,7 @@ def _call_litellm_vision(image_b64: str, mime_type: str, api_key: Optional[str] 
         "timeout": VISION_API_TIMEOUT,
     }
     # Add api_base and custom headers for OpenAI-compatible providers
-    if not model.startswith("gemini/") and not model.startswith("anthropic/") and not model.startswith("vertex_ai/"):
+    if not route_model.startswith("gemini/") and not route_model.startswith("anthropic/") and not route_model.startswith("vertex_ai/"):
         if cfg.openai_base_url:
             call_kwargs["api_base"] = cfg.openai_base_url
         if cfg.openai_base_url and "aihubmix.com" in cfg.openai_base_url:

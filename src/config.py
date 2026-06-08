@@ -48,6 +48,25 @@ class ConfigIssue:
 
 
 _MANAGED_LITELLM_KEY_PROVIDERS = {"gemini", "vertex_ai", "anthropic", "openai", "deepseek"}
+_DIRECT_ENV_LITELLM_PROVIDERS = {
+    "minimax",
+    "cohere",
+    "huggingface",
+    "bedrock",
+    "sagemaker",
+    "azure",
+    "replicate",
+    "together_ai",
+    "palm",
+    "text-completion-openai",
+    "command-r",
+    "groq",
+    "cerebras",
+    "fireworks_ai",
+    "friendliai",
+    "google",
+    "xai",
+}
 SUPPORTED_LLM_CHANNEL_PROTOCOLS = ("openai", "anthropic", "gemini", "vertex_ai", "deepseek", "ollama")
 _FALSEY_ENV_VALUES = {"0", "false", "no", "off"}
 # Fallback defaults used when ANSPIRE_API_KEYS is reused as legacy OpenAI-compatible source.
@@ -250,12 +269,21 @@ def channel_allows_empty_api_key(protocol: Optional[str], base_url: Optional[str
 
 
 def normalize_llm_channel_model(model: str, protocol: Optional[str], base_url: Optional[str] = None) -> str:
-    """Attach a provider prefix when the model omits it."""
+    """Normalize the user-facing channel model name.
+
+    OpenAI-compatible channels intentionally keep the original upstream model
+    identifier, including names such as ``deepseek-ai/DeepSeek-V3``.  LiteLLM
+    routing prefixes are computed separately for request dispatch so saved
+    runtime selections do not have to follow LiteLLM's provider/model format.
+    """
     normalized_model = model.strip()
     if not normalized_model:
         return normalized_model
 
     resolved_protocol = resolve_llm_channel_protocol(protocol, base_url=base_url, models=[normalized_model])
+
+    if resolved_protocol == "openai":
+        return normalized_model
 
     if "/" in normalized_model:
         # The model already has a slash, e.g. 'deepseek-ai/DeepSeek-V3'.
@@ -265,12 +293,7 @@ def normalize_llm_channel_model(model: str, protocol: Optional[str], base_url: O
         raw_prefix, remainder = normalized_model.split("/", 1)
         prefix = raw_prefix.lower()
         canonical_prefix = canonicalize_llm_channel_protocol(prefix)
-        known_providers = _MANAGED_LITELLM_KEY_PROVIDERS | set(SUPPORTED_LLM_CHANNEL_PROTOCOLS) | {
-            "minimax",
-            "cohere", "huggingface", "bedrock", "sagemaker", "azure",
-            "replicate", "together_ai", "palm", "text-completion-openai",
-            "command-r", "groq", "cerebras", "fireworks_ai", "friendliai",
-        }
+        known_providers = _MANAGED_LITELLM_KEY_PROVIDERS | set(SUPPORTED_LLM_CHANNEL_PROTOCOLS) | _DIRECT_ENV_LITELLM_PROVIDERS
         if prefix in known_providers:
             return normalized_model
         if canonical_prefix in known_providers:
@@ -283,6 +306,37 @@ def normalize_llm_channel_model(model: str, protocol: Optional[str], base_url: O
     if not resolved_protocol:
         return normalized_model
     return f"{resolved_protocol}/{normalized_model}"
+
+
+def get_litellm_channel_route_model(model: str, protocol: Optional[str], base_url: Optional[str] = None) -> str:
+    """Return the LiteLLM model string used internally for a channel request."""
+    normalized_model = (model or "").strip()
+    if not normalized_model:
+        return normalized_model
+
+    resolved_protocol = resolve_llm_channel_protocol(protocol, base_url=base_url, models=[normalized_model])
+    if resolved_protocol == "openai":
+        return normalized_model if normalized_model.startswith("openai/") else f"openai/{normalized_model}"
+    return normalize_llm_channel_model(normalized_model, resolved_protocol, base_url)
+
+
+def get_litellm_direct_route_model(model: str, config: Optional["Config"] = None) -> str:
+    """Return the LiteLLM model string for direct legacy completion calls."""
+    normalized_model = (model or "").strip()
+    if not normalized_model:
+        return normalized_model
+    if normalized_model.startswith("openai/"):
+        return normalized_model
+    if "/" not in normalized_model:
+        return normalized_model
+
+    provider = _get_litellm_provider(normalized_model).lower()
+    known_providers = _MANAGED_LITELLM_KEY_PROVIDERS | _DIRECT_ENV_LITELLM_PROVIDERS | set(SUPPORTED_LLM_CHANNEL_PROTOCOLS)
+    if provider in known_providers or canonicalize_llm_channel_protocol(provider) in known_providers:
+        return normalized_model
+    if config is not None and getattr(config, "openai_base_url", None):
+        return f"openai/{normalized_model}"
+    return normalized_model
 
 
 def get_configured_llm_models(model_list: List[Dict[str, Any]]) -> List[str]:
@@ -346,7 +400,31 @@ def _resolve_litellm_model_list_entry(
             model_name = str(params.get("model") or "").strip()
         if model_name == normalized_model:
             return entry
+        params = entry.get("litellm_params", {}) or {}
+        wire_model = str(params.get("model") or "").strip()
+        if wire_model == normalized_model:
+            return entry
     return None
+
+
+def resolve_litellm_router_model_name(
+    model: str,
+    model_list: Optional[List[Dict[str, Any]]] = None,
+) -> str:
+    """Resolve a runtime model selection to a Router model_name alias."""
+    normalized_model = (model or "").strip()
+    if not normalized_model or not model_list:
+        return normalized_model
+
+    for entry in model_list:
+        model_name = str(entry.get("model_name") or "").strip()
+        params = entry.get("litellm_params", {}) or {}
+        wire_model = str(params.get("model") or "").strip()
+        if model_name and model_name == normalized_model:
+            return model_name
+        if wire_model and wire_model == normalized_model:
+            return model_name or wire_model
+    return normalized_model
 
 
 def _extract_thinking_config(payload: Optional[Dict[str, Any]]) -> Any:
@@ -1794,7 +1872,11 @@ class Config:
             for model_name in ch['models']:
                 for api_key in ch['api_keys']:
                     litellm_params: Dict[str, Any] = {
-                        'model': model_name,
+                        'model': get_litellm_channel_route_model(
+                            model_name,
+                            ch.get('protocol'),
+                            ch.get('base_url'),
+                        ),
                     }
                     if api_key:
                         litellm_params['api_key'] = api_key

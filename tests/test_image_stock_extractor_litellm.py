@@ -190,6 +190,20 @@ class TestCallLitellmVision:
             assert kwargs["api_base"] == "https://aihubmix.com/v1"
             assert kwargs["extra_headers"]["APP-Code"] == "GPIJ3886"
 
+    def test_openai_compatible_raw_slash_model_routes_internally(self):
+        cfg = _cfg(
+            openai_vision_model="deepseek-ai/DeepSeek-V3.2",
+            openai_api_keys=[_OPENAI_KEY],
+            openai_base_url="https://api.siliconflow.cn/v1",
+        )
+        with patch("src.services.image_stock_extractor.get_config", return_value=cfg), \
+             patch("src.services.image_stock_extractor.litellm.completion",
+                   return_value=self._good_response()) as mock_comp:
+            _call_litellm_vision("b64", "image/jpeg")
+            kwargs = mock_comp.call_args[1]
+            assert kwargs["model"] == "openai/deepseek-ai/DeepSeek-V3.2"
+            assert kwargs["api_base"] == "https://api.siliconflow.cn/v1"
+
     def test_raises_when_model_not_configured(self):
         cfg = _cfg(openai_vision_model=None, litellm_model="", gemini_api_keys=[], anthropic_api_keys=[], openai_api_keys=[])
         with patch("src.services.image_stock_extractor.get_config", return_value=cfg):
