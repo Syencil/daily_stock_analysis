@@ -619,19 +619,22 @@ function parseModelRef(model: string): ParsedModelRef {
   };
 }
 
-function getModelComparisonKey(model: string, protocol: ChannelProtocol): string {
-  const normalizedModel = normalizeModelForRuntime(model, protocol).trim();
-  const parsed = parseModelRef(normalizedModel);
-  if (!parsed.name) {
-    return '';
-  }
-  return `${parsed.provider}/${parsed.name}`;
-}
-
 function areModelsEquivalent(a: string, b: string, protocol: ChannelProtocol): boolean {
-  const left = getModelComparisonKey(a, protocol);
-  const right = getModelComparisonKey(b, protocol);
-  return left !== '' && left === right;
+  const left = parseModelRef(normalizeModelForRuntime(a, protocol));
+  const right = parseModelRef(normalizeModelForRuntime(b, protocol));
+  if (!left.name || !right.name || left.name !== right.name) {
+    return false;
+  }
+
+  if (left.provider === right.provider) {
+    return true;
+  }
+
+  const canonicalProtocol = PROTOCOL_ALIASES[protocol] || protocol;
+  return (
+    (left.provider === canonicalProtocol && !right.hasProvider) ||
+    (right.provider === canonicalProtocol && !left.hasProvider)
+  );
 }
 
 function toggleModelSelection(models: string, targetModel: string, protocol: ChannelProtocol): string {

@@ -11,6 +11,30 @@ import { generateUUID } from '../utils/uuid';
 
 const STORAGE_KEY_SESSION = 'dsa_chat_session_id';
 
+function getStoredSessionId(): string | null {
+  if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'function') {
+    return null;
+  }
+
+  try {
+    return localStorage.getItem(STORAGE_KEY_SESSION);
+  } catch {
+    return null;
+  }
+}
+
+function setStoredSessionId(sessionId: string): void {
+  if (typeof localStorage === 'undefined' || typeof localStorage.setItem !== 'function') {
+    return;
+  }
+
+  try {
+    localStorage.setItem(STORAGE_KEY_SESSION, sessionId);
+  } catch {
+    // Ignore storage write failures; the in-memory store remains authoritative.
+  }
+}
+
 export interface ProgressStep {
   type: string;
   step?: number;
@@ -101,10 +125,7 @@ interface AgentChatActions {
   startStream: (payload: ChatStreamRequest, meta?: StreamMeta) => Promise<void>;
 }
 
-const getInitialSessionId = (): string =>
-  typeof localStorage !== 'undefined'
-    ? localStorage.getItem(STORAGE_KEY_SESSION) || generateUUID()
-    : generateUUID();
+const getInitialSessionId = (): string => getStoredSessionId() || generateUUID();
 
 export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set, get) => ({
   messages: [],
@@ -144,7 +165,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
       const sessionList = await agentApi.getChatSessions();
       set({ sessions: sessionList });
 
-      const savedId = localStorage.getItem(STORAGE_KEY_SESSION);
+      const savedId = getStoredSessionId();
       if (savedId) {
         const sessionExists = sessionList.some((s) => s.session_id === savedId);
         if (sessionExists) {
@@ -161,10 +182,10 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
         } else {
           const newId = generateUUID();
           set({ sessionId: newId });
-          localStorage.setItem(STORAGE_KEY_SESSION, newId);
+          setStoredSessionId(newId);
         }
       } else {
-        localStorage.setItem(STORAGE_KEY_SESSION, get().sessionId);
+        setStoredSessionId(get().sessionId);
       }
     } catch {
       // Ignore
@@ -181,7 +202,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
     set({ abortController: null });
 
     set({ messages: [], sessionId: targetSessionId });
-    localStorage.setItem(STORAGE_KEY_SESSION, targetSessionId);
+    setStoredSessionId(targetSessionId);
 
     try {
       const msgs = await agentApi.getChatSessionMessages(targetSessionId);
@@ -209,7 +230,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
       chatError: null,
       abortController: null,
     });
-    localStorage.setItem(STORAGE_KEY_SESSION, newId);
+    setStoredSessionId(newId);
   },
 
   startStream: async (payload, meta) => {

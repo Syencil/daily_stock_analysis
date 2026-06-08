@@ -969,7 +969,8 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         )
 
         self.assertTrue(payload["success"])
-        self.assertEqual(payload["resolved_model"], "openai/kimi-k2.6")
+        self.assertEqual(payload["resolved_model"], "kimi-k2.6")
+        self.assertEqual(mock_completion.call_args.kwargs["model"], "openai/kimi-k2.6")
         self.assertEqual(mock_completion.call_args.kwargs["temperature"], 1.0)
 
     def test_update_switching_to_kimi_does_not_rewrite_saved_llm_temperature(self) -> None:
@@ -1037,7 +1038,8 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         )
 
         self.assertTrue(payload["success"])
-        self.assertEqual(payload["resolved_model"], "openai/gpt-4o-mini")
+        self.assertEqual(payload["resolved_model"], "gpt-4o-mini")
+        self.assertEqual(mock_completion.call_args.kwargs["model"], "openai/gpt-4o-mini")
         self.assertEqual(mock_completion.call_args.kwargs["temperature"], 0.42)
 
     @patch("litellm.completion")
